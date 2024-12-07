@@ -1,0 +1,25 @@
+# Node.js dependencies
+/node_modules/
+
+# Env files
+.env
+.env.local
+.env.*.local
+
+# Build output
+/dist/
+
+# Logs
+*.log
+
+# PostgreSQL files 
+.pgdata/
+
+# Temporary files from IDEs
+.idea/
+
+# Jest/Testing cache
+*.test.ts
+*.test.js
+*.test.tsx
+*.test.jsx

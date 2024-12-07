@@ -1,0 +1,48 @@
+# Node.js dependencies
+/node_modules/
+
+# Env files
+.env
+.env.local
+.env.*.local
+
+# Build output
+/dist/
+/build/
+/coverage/
+
+# Logs
+*.log
+
+# Docker files
+.docker/
+docker-compose.override.yml
+
+# npm package-lock and yarn lock
+package-lock.json
+yarn.lock
+
+# VSCode settings
+.vscode/
+
+# Mac system files
+.DS_Store
+
+# PostgreSQL files 
+.pgdata/
+
+# Frontend build files
+frontend/build/
+
+# Backend build files
+backend/Services/stock-service/dist/
+backend/Services/user-service/dist/
+
+# Temporary files from IDEs
+.idea/
+
+# Jest/Testing cache
+*.test.ts
+*.test.js
+*.test.tsx
+*.test.jsx
