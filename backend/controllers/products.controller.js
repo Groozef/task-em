@@ -4,22 +4,38 @@ class ProductController {
     // Создание продукта
     async createProduct(req, res) {
         const { product_plu, product_name } = req.body;
-
+    
         try {
             const result = await pool.query(
                 `
-                INSERT INTO products (product_plu, product_name) VALUES ($1, $2) RETURNING *
-            `,
+                    INSERT INTO products (product_plu, product_name) 
+                    VALUES ($1, $2) 
+                    RETURNING *
+                `,
                 [product_plu, product_name]
             );
-
+    
+            const productId = result.rows[0].product_id;
+            const shopId = null;
+            const action = 'CREATE';
+            const quantityActions = 0;
+            const actionDate = new Date();
+    
+            await pool.query(
+                `
+                    INSERT INTO history (product_id, shop_id, action, quantity_actions, action_date)
+                    VALUES ($1, $2, $3, $4, $5)
+                `,
+                [productId, shopId, action, quantityActions, actionDate]
+            );
+    
             res.status(201).json(result.rows[0]);
         } catch (error) {
-            console.error(error.message);
+            console.error("Ошибка при создании товара или записи в историю:", error.message);
             res.status(500).json({ error: "Ошибка при создании товара" });
         }
     }
-
+    
     // Создание остатка
     async createStock(req, res) {
         const { product_id, shop_id, stock_quantity, stock_order } = req.body;
@@ -27,10 +43,19 @@ class ProductController {
         try {
             const result = await pool.query(
                 `
-                INSERT INTO stocks (product_id, shop_id, stock_quantity, stock_order)
-                VALUES ($1, $2, $3, $4) RETURNING *
-            `,
+                    INSERT INTO stocks (product_id, shop_id, stock_quantity, stock_order)
+                    VALUES ($1, $2, $3, $4) RETURNING *
+                `,
                 [product_id, shop_id, stock_quantity || 0, stock_order || 0]
+            );
+
+            const stock = result.rows[0];
+            await pool.query(
+                `
+                    INSERT INTO history (product_id, shop_id, action, quantity_actions, action_date)
+                    VALUES ($1, $2, 'CREATE', $3, NOW())
+                `,
+                [stock.product_id, stock.shop_id, stock_quantity || 0]
             );
 
             res.status(201).json(result.rows[0]);
@@ -47,16 +72,25 @@ class ProductController {
         try {
             const result = await pool.query(
                 `
-                UPDATE stocks 
-                SET stock_quantity = stock_quantity + $1 
-                WHERE product_id = $2 AND shop_id = $3 RETURNING *
-            `,
+                    UPDATE stocks 
+                    SET stock_quantity = stock_quantity + $1 
+                    WHERE product_id = $2 AND shop_id = $3 RETURNING *
+                `,
                 [stock_quantity, product_id, shop_id]
             );
 
             if (result.rows.length === 0) {
                 return res.status(404).json({ error: "Остаток не найден" });
             }
+
+            const stock = result.rows[0];
+            await pool.query(
+                `
+                    INSERT INTO history (product_id, shop_id, action, quantity_actions, action_date)
+                    VALUES ($1, $2, 'INCREASE', $3, NOW())
+                `,
+                [stock.product_id, stock.shop_id, stock_quantity]
+            );
 
             res.status(200).json(result.rows[0]);
         } catch (error) {
@@ -72,8 +106,8 @@ class ProductController {
         try {
             const checkStock = await pool.query(
                 `
-                SELECT stock_quantity FROM stocks WHERE product_id = $1 AND shop_id = $2
-            `,
+                    SELECT stock_quantity FROM stocks WHERE product_id = $1 AND shop_id = $2
+                `,
                 [product_id, shop_id]
             );
 
@@ -93,11 +127,20 @@ class ProductController {
 
             const result = await pool.query(
                 `
-                UPDATE stocks 
-                SET stock_quantity = stock_quantity - $1 
-                WHERE product_id = $2 AND shop_id = $3 RETURNING *
-            `,
+                    UPDATE stocks 
+                    SET stock_quantity = stock_quantity - $1 
+                    WHERE product_id = $2 AND shop_id = $3 RETURNING *
+                `,
                 [stock_quantity, product_id, shop_id]
+            );
+
+            const stock = result.rows[0];
+            await pool.query(
+                `
+                    INSERT INTO history (product_id, shop_id, action, quantity_actions, action_date)
+                    VALUES ($1, $2, 'DECREASE', $3, NOW())
+                `,
+                [stock.product_id, stock.shop_id, stock_quantity]
             );
 
             res.status(200).json(result.rows[0]);
@@ -109,22 +152,23 @@ class ProductController {
 
     // Фильтрация остатка
     async getStockByFilter(req, res) {
-        const { product_plu, shop_id, stock_quantity_min, stock_quantity_max, stock_order_min, stock_order_max } = req.query;
+        const { product_plu, shop_id, stock_quantity_min, stock_quantity_max, stock_order_min, stock_order_max } =
+            req.query;
         try {
             const query = `
-                SELECT stocks.stock_quantity, stocks.stock_order, products.product_plu, products.product_name, shops.shop_name, shops.shop_id, stocks.product_id
-                FROM stocks
-                INNER JOIN products ON stocks.product_id = products.product_id
-                INNER JOIN shops ON stocks.shop_id = shops.shop_id
-                WHERE
-                    ($1::VARCHAR IS NULL OR products.product_plu = $1)
-                    AND ($2::INT IS NULL OR stocks.shop_id = $2)
-                    AND ($3::INT IS NULL OR stocks.stock_quantity >= $3)
-                    AND ($4::INT IS NULL OR stocks.stock_quantity <= $4)
-                    AND ($5::INT IS NULL OR stocks.stock_order >= $5)
-                    AND ($6::INT IS NULL OR stocks.stock_order <= $6);
-            `;
-   
+                    SELECT stocks.stock_quantity, stocks.stock_order, products.product_plu, products.product_name, shops.shop_name, shops.shop_id, stocks.product_id
+                    FROM stocks
+                    INNER JOIN products ON stocks.product_id = products.product_id
+                    INNER JOIN shops ON stocks.shop_id = shops.shop_id
+                    WHERE
+                        ($1::VARCHAR IS NULL OR products.product_plu = $1)
+                        AND ($2::INT IS NULL OR stocks.shop_id = $2)
+                        AND ($3::INT IS NULL OR stocks.stock_quantity >= $3)
+                        AND ($4::INT IS NULL OR stocks.stock_quantity <= $4)
+                        AND ($5::INT IS NULL OR stocks.stock_order >= $5)
+                        AND ($6::INT IS NULL OR stocks.stock_order <= $6);
+                `;
+
             const result = await pool.query(query, [
                 product_plu || null,
                 shop_id || null,
@@ -133,14 +177,13 @@ class ProductController {
                 stock_order_min || null,
                 stock_order_max || null,
             ]);
-   
+
             res.status(200).json(result.rows);
         } catch (error) {
             console.error(error.message);
             res.status(500).json({ error: "Ошибка при получении остатков" });
         }
     }
-   
 
     // Фильтрация товара
     async getProductsByFilter(req, res) {
@@ -148,12 +191,12 @@ class ProductController {
 
         try {
             const query = `
-                SELECT product_plu, product_name
-                FROM products
-                WHERE
-                    ($1::VARCHAR IS NULL OR product_name ILIKE '%' || $1 || '%')
-                    AND ($2::VARCHAR IS NULL OR product_plu = $2);
-            `;
+                    SELECT product_plu, product_name
+                    FROM products
+                    WHERE
+                        ($1::VARCHAR IS NULL OR product_name ILIKE '%' || $1 || '%')
+                        AND ($2::VARCHAR IS NULL OR product_plu = $2);
+                `;
 
             const result = await pool.query(query, [product_name, product_plu]);
 

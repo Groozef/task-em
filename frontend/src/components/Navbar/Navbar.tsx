@@ -70,6 +70,21 @@ const Navbar: React.FC = () => {
                                 Остатки
                             </NavLink>
                         </li>
+
+                        <li>
+                            <NavLink
+                                to="/history"
+                                className={({ isActive }) =>
+                                    `block py-2 px-3 rounded md:bg-transparent md:p-0 ${
+                                        isActive
+                                            ? "text-blue-700 bg-blue-100 dark:text-blue-500"
+                                            : "text-gray-900 hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700"
+                                    }`
+                                }
+                            >
+                                История дейсвий с товарами
+                            </NavLink>
+                        </li>
                     </ul>
                 </div>
             </div>
